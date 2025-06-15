@@ -3,3 +3,9 @@
 *.pyc
 wandb
 checkpoint/*.pth.tr
+
+__pycache__/
+.ipynb_checkpoints/
+.vscode/
+motion3d/
+keypoints/

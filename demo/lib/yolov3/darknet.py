@@ -1,24 +1,25 @@
 from __future__ import division
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-import cv2
 import os
 import sys
 
-from lib.yolov3.util import convert2cpu as cpu
-from lib.yolov3.util import predict_transform
+import cv2
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from demo.lib.yolov3.util import convert2cpu as cpu
+from demo.lib.yolov3.util import predict_transform
 
 
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
         super(test_net, self).__init__()
-        self.num_layers= num_layers
+        self.num_layers = num_layers
         self.linear_1 = nn.Linear(input_size, 5)
-        self.middle = nn.ModuleList([nn.Linear(5,5) for x in range(num_layers)])
-        self.output = nn.Linear(5,2)
+        self.middle = nn.ModuleList([nn.Linear(5, 5) for x in range(num_layers)])
+        self.output = nn.Linear(5, 2)
 
     def forward(self, x):
         x = x.view(-1)
@@ -30,7 +31,7 @@ def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
     img = cv2.resize(img, (416, 416))
     img_ = img[:, :, ::-1].transpose((2, 0, 1))
-    img_ = img_[np.newaxis, :, :, :]/255.0
+    img_ = img_[np.newaxis, :, :, :] / 255.0
     img_ = torch.from_numpy(img_).float()
     return img_
 
@@ -44,23 +45,23 @@ def parse_cfg(cfgfile):
 
     """
     # cfgfile = os.path.join(sys.path[-1], cfgfile)
-    file = open(cfgfile, 'r')
-    lines = file.read().split('\n')     # store the lines in a list
+    file = open(cfgfile, "r")
+    lines = file.read().split("\n")  # store the lines in a list
     lines = [x for x in lines if len(x) > 0]  # get read of the empty lines
-    lines = [x for x in lines if x[0] != '#']
+    lines = [x for x in lines if x[0] != "#"]
     lines = [x.rstrip().lstrip() for x in lines]
 
     block = {}
     blocks = []
 
     for line in lines:
-        if line[0] == "[":               # This marks the start of a new block
+        if line[0] == "[":  # This marks the start of a new block
             if len(block) != 0:
                 blocks.append(block)
                 block = {}
             block["type"] = line[1:-1].rstrip()
         else:
-            key,value = line.split("=")
+            key, value = line.split("=")
             block[key.rstrip()] = value.lstrip()
     blocks.append(block)
 
@@ -93,7 +94,9 @@ class DetectionLayer(nn.Module):
         x = x.data
         global CUDA
         prediction = x
-        prediction = predict_transform(prediction, inp_dim, self.anchors, num_classes, confidence, CUDA)
+        prediction = predict_transform(
+            prediction, inp_dim, self.anchors, num_classes, confidence, CUDA
+        )
         return prediction
 
 
@@ -104,43 +107,60 @@ class Upsample(nn.Module):
 
     def forward(self, x):
         stride = self.stride
-        assert(x.data.dim() == 4)
+        assert x.data.dim() == 4
         B = x.data.size(0)
         C = x.data.size(1)
         H = x.data.size(2)
         W = x.data.size(3)
         ws = stride
         hs = stride
-        x = x.view(B, C, H, 1, W, 1).expand(B, C, H, stride, W, stride).contiguous().view(B, C, H*stride, W*stride)
+        x = (
+            x.view(B, C, H, 1, W, 1)
+            .expand(B, C, H, stride, W, stride)
+            .contiguous()
+            .view(B, C, H * stride, W * stride)
+        )
         return x
 
 
 class ReOrgLayer(nn.Module):
     def __init__(self, stride=2):
         super(ReOrgLayer, self).__init__()
-        self.stride= stride
+        self.stride = stride
 
     def forward(self, x):
-        assert(x.data.dim() == 4)
+        assert x.data.dim() == 4
         B, C, H, W = x.data.shape
         hs = self.stride
         ws = self.stride
-        assert(H % hs == 0),  "The stride " + str(self.stride) + " is not a proper divisor of height " + str(H)
-        assert(W % ws == 0),  "The stride " + str(self.stride) + " is not a proper divisor of height " + str(W)
+        assert H % hs == 0, (
+            "The stride "
+            + str(self.stride)
+            + " is not a proper divisor of height "
+            + str(H)
+        )
+        assert W % ws == 0, (
+            "The stride "
+            + str(self.stride)
+            + " is not a proper divisor of height "
+            + str(W)
+        )
         x = x.view(B, C, H // hs, hs, W // ws, ws).transpose(-2, -3).contiguous()
         x = x.view(B, C, H // hs * W // ws, hs, ws)
-        x = x.view(B, C, H // hs * W // ws, hs*ws).transpose(-1, -2).contiguous()
-        x = x.view(B, C, ws*hs, H // ws, W // ws).transpose(1, 2).contiguous()
-        x = x.view(B, C*ws*hs, H // ws, W // ws)
+        x = x.view(B, C, H // hs * W // ws, hs * ws).transpose(-1, -2).contiguous()
+        x = x.view(B, C, ws * hs, H // ws, W // ws).transpose(1, 2).contiguous()
+        x = x.view(B, C * ws * hs, H // ws, W // ws)
         return x
 
 
 def create_modules(blocks):
-    net_info = blocks[0]     # Captures the information about the input and pre-processing
+    net_info = blocks[0]  # Captures the information about the input and pre-processing
 
     module_list = nn.ModuleList()
 
-    index = 0    # indexing blocks helps with implementing route  layers (skip connections)
+    index = (
+        0  # indexing blocks helps with implementing route  layers (skip connections)
+    )
     prev_filters = 3
     output_filters = []
 
@@ -160,7 +180,7 @@ def create_modules(blocks):
                 batch_normalize = 0
                 bias = True
 
-            filters= int(x["filters"])
+            filters = int(x["filters"])
             padding = int(x["pad"])
             kernel_size = int(x["size"])
             stride = int(x["stride"])
@@ -171,7 +191,7 @@ def create_modules(blocks):
                 pad = 0
 
             # Add the convolutional layer
-            conv = nn.Conv2d(prev_filters, filters, kernel_size, stride, pad, bias = bias)
+            conv = nn.Conv2d(prev_filters, filters, kernel_size, stride, pad, bias=bias)
             module.add_module("conv_{0}".format(index), conv)
 
             # Add the Batch Norm Layer
@@ -182,7 +202,7 @@ def create_modules(blocks):
             # Check the activation.
             # It is either Linear or a Leaky ReLU for YOLO
             if activation == "leaky":
-                activn = nn.LeakyReLU(0.1, inplace = True)
+                activn = nn.LeakyReLU(0.1, inplace=True)
                 module.add_module("leaky_{0}".format(index), activn)
 
         # If it's an upsampling layer
@@ -190,13 +210,13 @@ def create_modules(blocks):
 
         elif x["type"] == "upsample":
             stride = int(x["stride"])
-#           upsample = Upsample(stride)
+            #           upsample = Upsample(stride)
             upsample = nn.Upsample(scale_factor=2, mode="nearest")
             module.add_module("upsample_{}".format(index), upsample)
 
         # If it is a route layer
-        elif (x["type"] == "route"):
-            x["layers"] = x["layers"].split(',')
+        elif x["type"] == "route":
+            x["layers"] = x["layers"].split(",")
 
             # Start  of a route
             start = int(x["layers"][0])
@@ -245,7 +265,7 @@ def create_modules(blocks):
 
             anchors = x["anchors"].split(",")
             anchors = [int(a) for a in anchors]
-            anchors = [(anchors[i], anchors[i+1]) for i in range(0, len(anchors),2)]
+            anchors = [(anchors[i], anchors[i + 1]) for i in range(0, len(anchors), 2)]
             anchors = [anchors[i] for i in mask]
 
             detection = DetectionLayer(anchors)
@@ -280,13 +300,17 @@ class Darknet(nn.Module):
     def forward(self, x, CUDA):
         detections = []
         modules = self.blocks[1:]
-        outputs = {}   # We cache the outputs for the route layer
+        outputs = {}  # We cache the outputs for the route layer
 
         write = 0
         for i in range(len(modules)):
 
-            module_type = (modules[i]["type"])
-            if module_type == "convolutional" or module_type == "upsample" or module_type == "maxpool":
+            module_type = modules[i]["type"]
+            if (
+                module_type == "convolutional"
+                or module_type == "upsample"
+                or module_type == "maxpool"
+            ):
 
                 x = self.module_list[i](x)
                 outputs[i] = x
@@ -313,10 +337,10 @@ class Darknet(nn.Module):
 
             elif module_type == "shortcut":
                 from_ = int(modules[i]["from"])
-                x = outputs[i-1] + outputs[i+from_]
+                x = outputs[i - 1] + outputs[i + from_]
                 outputs[i] = x
 
-            elif module_type == 'yolo':
+            elif module_type == "yolo":
 
                 anchors = self.module_list[i][0].anchors
                 # Get the input dimensions
@@ -338,7 +362,7 @@ class Darknet(nn.Module):
                 else:
                     detections = torch.cat((detections, x), 1)
 
-                outputs[i] = outputs[i-1]
+                outputs[i] = outputs[i - 1]
 
         try:
             return detections
@@ -356,13 +380,13 @@ class Darknet(nn.Module):
         # 2. Minor Version Number
         # 3. Subversion number
         # 4.5 Images seen by the network (during training)
-        header = np.fromfile(fp, dtype = np.int32, count = 5)
+        header = np.fromfile(fp, dtype=np.int32, count=5)
         self.header = torch.from_numpy(header)
         self.seen = self.header[3]
 
         # The rest of the values are the weights
         # Let's load them up
-        weights = np.fromfile(fp, dtype = np.float32)
+        weights = np.fromfile(fp, dtype=np.float32)
 
         ptr = 0
         for i in range(len(self.module_list)):
@@ -371,29 +395,33 @@ class Darknet(nn.Module):
             if module_type == "convolutional":
                 model = self.module_list[i]
                 try:
-                    batch_normalize = int(self.blocks[i+1]["batch_normalize"])
+                    batch_normalize = int(self.blocks[i + 1]["batch_normalize"])
                 except:
                     batch_normalize = 0
 
                 conv = model[0]
 
-                if (batch_normalize):
+                if batch_normalize:
                     bn = model[1]
 
                     # Get the number of weights of Batch Norm Layer
                     num_bn_biases = bn.bias.numel()
 
                     # Load the weights
-                    bn_biases = torch.from_numpy(weights[ptr:ptr + num_bn_biases])
+                    bn_biases = torch.from_numpy(weights[ptr : ptr + num_bn_biases])
                     ptr += num_bn_biases
 
-                    bn_weights = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
+                    bn_weights = torch.from_numpy(weights[ptr : ptr + num_bn_biases])
                     ptr += num_bn_biases
 
-                    bn_running_mean = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
+                    bn_running_mean = torch.from_numpy(
+                        weights[ptr : ptr + num_bn_biases]
+                    )
                     ptr += num_bn_biases
 
-                    bn_running_var = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
+                    bn_running_var = torch.from_numpy(
+                        weights[ptr : ptr + num_bn_biases]
+                    )
                     ptr += num_bn_biases
 
                     # Cast the loaded weights into dims of model weights.
@@ -413,7 +441,7 @@ class Darknet(nn.Module):
                     num_biases = conv.bias.numel()
 
                     # Load the weights
-                    conv_biases = torch.from_numpy(weights[ptr: ptr + num_biases])
+                    conv_biases = torch.from_numpy(weights[ptr : ptr + num_biases])
                     ptr = ptr + num_biases
 
                     # reshape the loaded weights according to the dims of the model weights
@@ -426,7 +454,7 @@ class Darknet(nn.Module):
                 num_weights = conv.weight.numel()
 
                 # Do the same as above for weights
-                conv_weights = torch.from_numpy(weights[ptr:ptr+num_weights])
+                conv_weights = torch.from_numpy(weights[ptr : ptr + num_weights])
                 ptr = ptr + num_weights
 
                 conv_weights = conv_weights.view_as(conv.weight.data)
