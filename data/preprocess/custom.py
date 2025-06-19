@@ -52,7 +52,7 @@ def main():
     assert len(train_clips_2d) == len(train_clips_3d)
     assert len(test_clips_2d) == len(test_clips_3d)
 
-    root_path = "../keypoints"
+    root_path = f"../motion3d/H36M-{n_frames}"
     if not os.path.exists(root_path):
         os.makedirs(root_path)
 
