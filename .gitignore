@@ -16,3 +16,5 @@ demo/output/
 video/
 *.png
 *.mp4
+*.weights
+*.pth
