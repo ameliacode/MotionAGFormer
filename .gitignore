@@ -15,6 +15,10 @@ ap3d/
 demo/output/
 video/
 *.png
+<<<<<<< HEAD
 *.mp4
 *.pth
 *.weights
+=======
+*.mp4
+>>>>>>> e6fa696 ([Task] Add demo code)
