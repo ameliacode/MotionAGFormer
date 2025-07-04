@@ -251,6 +251,7 @@ def get_pose3D(video_path, output_dir):
     model = nn.DataParallel(MotionAGFormer(**args)).cuda()
 
     # Put the pretrained model of MotionAGFormer in 'checkpoint/'
+<<<<<<< HEAD
 <<<<<<< HEAD:demo/vis_hrnet.py
     model_path = sorted(
         glob.glob(os.path.join("checkpoint", "h36m_ap3d", "latest_epoch.pth.tr"))
@@ -258,6 +259,11 @@ def get_pose3D(video_path, output_dir):
 =======
     model_path = sorted(glob.glob(os.path.join("checkpoint", "latest_epoch.pth.tr")))[0]
 >>>>>>> df8eb15 ([Task] Fix data codes):demo/vis.py
+=======
+    model_path = sorted(
+        glob.glob(os.path.join("checkpoint", "h36m_ap3d", "latest_epoch.pth.tr"))
+    )[0]
+>>>>>>> e6fa696 ([Task] Add demo code)
 
     pre_dict = torch.load(model_path, weights_only=False)
     model.load_state_dict(pre_dict["model"], strict=False)
