@@ -32,10 +32,11 @@ graph_only: False
 n_frames: 81 # 81 if add_velocity is False else 80
 
 # Data
-data_root: data/motion3d/
-data_root_2d: data/motion2d/
-subset_list: [ H36M-81 ]
-dt_file: h36m_sh_conf_cam_source_final.pkl
+data_root: data/ap3d
+# data_root: data/motion3d/
+# data_root_2d: data/motion2d/
+subset_list: [ frame_81 ]
+# dt_file: h36m_sh_conf_cam_source_final.pkl
 num_joints: 17
 root_rel: True # Normalizing joints relative to the root joint
 add_velocity: False

@@ -4,21 +4,21 @@ import glob
 import os
 import sys
 
+sys.path.append(os.getcwd())
+sys.path.append(os.path.dirname(os.getcwd()))
+
 import cv2
+import matplotlib
+import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
+from mpl_toolkits.mplot3d import Axes3D
 from tqdm import tqdm
 
 from demo.lib.hrnet.gen_kpts import gen_video_kpts as hrnet_pose
 from demo.lib.preprocess import h36m_coco_format, revise_kpts
-
-sys.path.append(os.getcwd())
-import matplotlib
-import matplotlib.gridspec as gridspec
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
 from demo.lib.utils import camera_to_world, normalize_screen_coordinates
 from model.MotionAGFormer import MotionAGFormer
 
@@ -153,7 +153,7 @@ def showimage(ax, img):
 
 
 def resample(n_frames):
-    even = np.linspace(0, n_frames, num=243, endpoint=False)
+    even = np.linspace(0, n_frames, num=27, endpoint=False)
     result = np.floor(even)
     result = np.clip(result, a_min=0, a_max=n_frames - 1).astype(np.uint32)
     return result
@@ -162,15 +162,15 @@ def resample(n_frames):
 def turn_into_clips(keypoints):
     clips = []
     n_frames = keypoints.shape[1]
-    if n_frames <= 243:
+    if n_frames <= 27:
         new_indices = resample(n_frames)
         clips.append(keypoints[:, new_indices, ...])
         downsample = np.unique(new_indices, return_index=True)[1]
     else:
-        for start_idx in range(0, n_frames, 243):
-            keypoints_clip = keypoints[:, start_idx : start_idx + 243, ...]
+        for start_idx in range(0, n_frames, 27):
+            keypoints_clip = keypoints[:, start_idx : start_idx + 27, ...]
             clip_length = keypoints_clip.shape[1]
-            if clip_length != 243:
+            if clip_length != 27:
                 new_indices = resample(clip_length)
                 clips.append(keypoints_clip[:, new_indices, ...])
                 downsample = np.unique(new_indices, return_index=True)[1]
@@ -210,6 +210,7 @@ def flip_data(
     """
     data: [N, F, 17, D] or [F, 17, D]
     """
+
     flipped_data = copy.deepcopy(data)
     flipped_data[..., 0] *= -1  # flip x of all joints
     flipped_data[..., left_joints + right_joints, :] = flipped_data[
@@ -222,9 +223,9 @@ def flip_data(
 def get_pose3D(video_path, output_dir):
     args, _ = argparse.ArgumentParser().parse_known_args()
     args.n_layers, args.dim_in, args.dim_feat, args.dim_rep, args.dim_out = (
-        16,
+        12,
         3,
-        128,
+        64,
         512,
         3,
     )
@@ -243,7 +244,7 @@ def get_pose3D(video_path, output_dir):
         1,
     )
     args.use_tcn, args.graph_only = False, False
-    args.n_frames = 243
+    args.n_frames = 27
     args = vars(args)
 
     ## Reload
@@ -251,11 +252,11 @@ def get_pose3D(video_path, output_dir):
 
     # Put the pretrained model of MotionAGFormer in 'checkpoint/'
     model_path = sorted(
-        glob.glob(os.path.join("checkpoint", "motionagformer-b-h36m.pth.tr"))
+        glob.glob(os.path.join("checkpoint", "h36m_ap3d", "latest_epoch.pth.tr"))
     )[0]
 
-    pre_dict = torch.load(model_path)
-    model.load_state_dict(pre_dict["model"], strict=True)
+    pre_dict = torch.load(model_path, weights_only=False)
+    model.load_state_dict(pre_dict["model"], strict=False)
 
     model.eval()
 
@@ -263,10 +264,6 @@ def get_pose3D(video_path, output_dir):
     keypoints = np.load(output_dir + "input_2D/keypoints.npz", allow_pickle=True)[
         "reconstruction"
     ]
-    # keypoints = np.load('demo/lakeside3.npy')
-    # keypoints = keypoints[:240]
-    # keypoints = keypoints[None, ...]
-    # keypoints = turn_into_h36m(keypoints)
 
     clips, downsample = turn_into_clips(keypoints)
 
@@ -290,7 +287,7 @@ def get_pose3D(video_path, output_dir):
         cv2.imwrite(output_dir_2D + str(("%04d" % i)) + "_2D.png", image)
 
     print("\nGenerating 3D pose...")
-    for idx, clip in enumerate(clips):
+    for idx, clip in tqdm(enumerate(clips)):
         input_2D = normalize_screen_coordinates(clip, w=img_size[1], h=img_size[0])
         input_2D_aug = flip_data(input_2D)
 
@@ -328,9 +325,9 @@ def get_pose3D(video_path, output_dir):
 
             output_dir_3D = output_dir + "pose3D/"
             os.makedirs(output_dir_3D, exist_ok=True)
-            str(("%04d" % (idx * 243 + j)))
+            str(("%04d" % (idx * 27 + j)))
             plt.savefig(
-                output_dir_3D + str(("%04d" % (idx * 243 + j))) + "_3D.png",
+                output_dir_3D + str(("%04d" % (idx * 27 + j))) + "_3D.png",
                 dpi=200,
                 format="png",
                 bbox_inches="tight",

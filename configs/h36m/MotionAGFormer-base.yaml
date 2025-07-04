@@ -33,6 +33,7 @@ graph_only: False
 n_frames: 243 # 243 if add_velocity is False else 242
 
 # Data
+keypoints_path: data/keypoints/
 data_root: data/motion3d/
 data_root_2d: data/motion2d/
 subset_list: [ H36M-243 ]

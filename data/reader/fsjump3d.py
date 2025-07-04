@@ -1,18 +1,15 @@
 import os
+import pickle
 import random
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from tqdm import tqdm
 
-from loss.pose3d import mpjpe as calculate_mpjpe
-from loss.pose3d import p_mpjpe as calculate_p_mpjpe
 from utils.data import flip_data
-from utils.learning import AverageMeter
 
 
-class CustomDataReader(Dataset):
+class FsJumpDataReader(Dataset):
     def __init__(
         self,
         keypoints_path,
@@ -29,7 +26,7 @@ class CustomDataReader(Dataset):
         self.flip = flip
         self.stride = stride if data_split == "train" else n_frames
 
-        # Load 2D and 3D keypoints data
+        # Load 2D and 3D keypoints data - keeping original method name
         data_2d, data_3d = self.load_data(keypoints_path, data_split)
 
         # Split data into clips and store them along with camera information
@@ -42,37 +39,33 @@ class CustomDataReader(Dataset):
         assert len(self.data_list_2d) == len(self.data_list_camera)
 
     def load_data(self, keypoints_path, data_split):
+        """Load data from numpy files (.npy format) or pickle files (.pkl format)"""
         data_list_2d, data_list_3d = {}, {}
 
         # Use keypoints_path directly instead of creating subdirectory
-        split_path = (
-            keypoints_path  # Changed from: os.path.join(keypoints_path, data_split)
-        )
+        if data_split:
+            split_path = os.path.join(keypoints_path, data_split)
+        else:
+            split_path = keypoints_path
 
         if not os.path.exists(split_path):
             raise FileNotFoundError(f"Data path does not exist: {split_path}")
 
         for filename in os.listdir(split_path):
-            if filename.endswith("_2D.npy"):
-                sequence_name = filename.replace("_2D.npy", "")
-                keypoints_2d_file = os.path.join(split_path, filename)
-                keypoints_3d_file = os.path.join(split_path, sequence_name + "_3D.npy")
+            if filename.endswith(".pkl") or filename.endswith(".pickle"):
+                file_path = os.path.join(split_path, filename)
 
-                if not os.path.isfile(keypoints_2d_file) or not os.path.isfile(
-                    keypoints_3d_file
-                ):
-                    print(f"Skipping missing file: {sequence_name}")
-                    continue
-                try:
-                    keypoints_2d = np.load(keypoints_2d_file)
-                    keypoints_3d = np.load(keypoints_3d_file)
-                except Exception as e:
-                    print(f"Error loading file {filename}: {e}")
-                    continue
+                with open(file_path, "rb") as f:
+                    data = pickle.load(f)
 
-                if keypoints_2d.ndim != 3 or keypoints_3d.ndim != 3:
-                    print(f"Invalid data dimensions for sequence: {sequence_name}")
-                    continue
+                sequence_name = filename.replace(".pkl", "").replace(".pickle", "")
+
+                try:  # preprocess
+                    keypoints_2d = np.array(data["pose_2d"])
+                    keypoints_3d = np.array(data["image_3d"])
+                except:  # train
+                    keypoints_2d = np.array(data["data_input"])
+                    keypoints_3d = np.array(data["data_label"])
 
                 data_list_2d[sequence_name] = keypoints_2d
                 data_list_3d[sequence_name] = {
@@ -80,9 +73,6 @@ class CustomDataReader(Dataset):
                     "res_h": self.res_h,
                     "res_w": self.res_w,
                 }
-
-        if not data_list_2d or not data_list_3d:
-            print("Warning: Data lists are empty after loading.")
 
         return data_list_2d, data_list_3d
 
@@ -94,12 +84,6 @@ class CustomDataReader(Dataset):
             keypoints_3d = data_3d[sequence_name]["keypoints"]
             res_h = data_3d[sequence_name]["res_h"]
             res_w = data_3d[sequence_name]["res_w"]
-
-            if keypoints_2d.shape[0] != keypoints_3d.shape[0]:
-                print(
-                    f"Warning: Mismatch in sequence length for {sequence_name}. Skipping sequence."
-                )
-                continue
 
             # Normalize keypoints
             keypoints_2d = self.normalize(keypoints_2d, res_w, res_h)
@@ -156,6 +140,12 @@ class CustomDataReader(Dataset):
             clips_2d.append(keypoints_2d[new_indices])
             clips_3d.append(keypoints_3d[new_indices])
         return clips_2d, clips_3d
+
+    def flip_data(self, keypoints):
+        """
+        Flip keypoints data using the imported flip_data function
+        """
+        return flip_data(keypoints)
 
     def __len__(self):
         return len(self.data_list_2d)

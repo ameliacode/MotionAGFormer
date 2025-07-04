@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Set your path here
-data_path = "./data/keypoints"
+data_path = "../keypoints"
 
 # Find all _2D.npy files
 files = glob.glob(f"{data_path}/*_2D.npy")

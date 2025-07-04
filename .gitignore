@@ -10,4 +10,9 @@ __pycache__/
 .vscode/
 motion3d/
 motion2d/
-keypoints/
+fsjump3d/
+ap3d/
+demo/output/
+video/
+*.png
+*.mp4

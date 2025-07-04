@@ -12,11 +12,15 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
+sys.path.append(os.getcwd())
+sys.path.append(os.path.dirname(os.getcwd()))
 sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
 
+from demo.lib.hrnet.gen_kpts import gen_video_kpts as hrnet_pose
 from demo.lib.preprocess import coco_coco, h36m_coco_format
 from dwpose.scripts.dwpose import DWposeDetector
 from dwpose.scripts.tool import read_frames
+from utils.data import normalize_screen_coordinates
 
 warnings.filterwarnings("ignore")
 os.environ["TORCH_USE_CUDA_DSA"] = "1"
@@ -27,11 +31,11 @@ def load_json(json_file: str) -> dict:
         return json.load(f)
 
 
-ranges = load_json("./ranges.json")
+ranges = load_json("./data/preprocess/ranges.json")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 detector = DWposeDetector(
-    det_config="D:\\github\\skating-ai\\v3\\pose\\dwpose\\config\\yolox_l_8xb8-300e_coco.py",
-    pose_config="D:\\github\\skating-ai\\v3\\pose\\dwpose\\config\\dwpose-l_384x288.py",
+    det_config="./dwpose/config/yolox_l_8xb8-300e_coco.py",
+    pose_config="./dwpose/config/dwpose-l_384x288.py",
     keypoints_only=True,
 ).to(device)
 video_paths = glob.glob("D:\\github\\FS-Jump3D\\data\\**\\*.mp4", recursive=True)
@@ -40,7 +44,7 @@ os.makedirs(output_dir, exist_ok=True)
 lock = Lock()
 
 
-def estimate2d(video_path, detector):
+def estimate2d_dwpose(video_path, detector):
     path_parts = Path(video_path).parts
     skater = path_parts[4].lower()
     jump = Path(video_path).stem.lower()
@@ -63,6 +67,7 @@ def estimate2d(video_path, detector):
     person_idx = 0
 
     for frame in frames:
+        # frame = normalize_screen_coordinates(frame, w=frame.width, h=frame.height)
         pose = detector(frame)
         candidate = pose["bodies"]["candidate"]
         subset = pose["bodies"]["subset"]
@@ -110,6 +115,18 @@ def estimate2d(video_path, detector):
     return keypoints
 
 
+def estimate2d_hrnet(video_path):
+    keypoints, scores = hrnet_pose(
+        video_path, det_dim=416, num_peroson=1, gen_output=True
+    )
+    keypoints, scores, valid_frames = h36m_coco_format(keypoints, scores)
+
+    # Add conf score to the last dim
+    keypoints = np.concatenate((keypoints, scores[..., None]), axis=-1)
+
+    return keypoints
+
+
 def process_video(video_path):
     path_parts = Path(video_path).parts
     skater = path_parts[-3].lower()
@@ -122,7 +139,8 @@ def process_video(video_path):
         if os.path.exists(output_path):
             return
 
-    keypoints = estimate2d(video_path, detector)
+    keypoints = estimate2d_dwpose(video_path, detector)
+    # keypoints = estimate2d_hrnet(video_path)
 
     with lock:
         np.save(output_path, keypoints)
