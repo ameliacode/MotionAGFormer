@@ -17,9 +17,9 @@ from data.const import (
     H36M_LOWER_BODY_JOINTS,
     H36M_UPPER_BODY_JOINTS,
 )
+from data.reader.h36m import DataReaderH36M
 
-# from data.reader.h36m import DataReaderH36M
-from data.reader.ap3d import DataReaderH36M
+# from data.reader.ap3d import DataReaderH36M
 from data.reader.motion_dataset import MotionDataset3D
 from loss.pose3d import acc_error as calculate_acc_err
 from loss.pose3d import jpe as calculate_jpe
@@ -296,7 +296,7 @@ def train(args, opts):
         data_stride_train=args.n_frames // 3,
         data_stride_test=args.n_frames,
         dt_root=args.data_root,
-        # dt_file=args.dt_file,
+        dt_file=args.dt_file,  # no ap3d
     )  # Used for H36m evaluation
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -328,7 +328,9 @@ def train(args, opts):
         )
         if os.path.exists(checkpoint_path):
             checkpoint = torch.load(
-                checkpoint_path, map_location=lambda storage, loc: storage
+                checkpoint_path,
+                map_location=lambda storage, loc: storage,
+                weights_only=False,
             )
             model.load_state_dict(checkpoint["model"], strict=True)
 
